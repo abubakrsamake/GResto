@@ -1,0 +1,23 @@
+{
+  "status": "DONNEES ALIMENTEES ET VERIFIEES",
+  "base_de_donnees": "DB_GResto (postgresql+asyncpg://postgres@localhost:5432/DB_GResto)",
+  "donnees_inserees": {
+    "utilisateurs": ["Admin (admin@resto.com)", "Marie (marie@resto.com)"],
+    "roles": ["SUPERADMIN", "CASHIER"],
+    "pos": "Caisse 1 (id: 3fa85f64-...)",
+    "session_ouverte": "OPEN (opening_amount=500000 FCFA)",
+    "categories": ["Boissons", "Plats", "Desserts"],
+    "produits": ["Eau Minérale 50cl", "Coca Cola 33cl", "Jus d'Orange 25cl", "Steak Frites", "Poulet Yassa", "Gratin de Poisson", "Salade César", "Cake au Chocolat", "Crème Brûlée", "Tarte Tatin", "Mousse au Café", "Frites Nature"],
+    "commande": "ORD-SEED-001 (2x Eau Minérale)",
+    "paiement": "CASH 1000 FCFA (SUCCESS)"
+  },
+  "endpoints_testes": {
+    "/health": "200",
+    "/api/v1/auth/login-pin": "200 (PIN 1234)",
+    "/api/v1/sessions": "200",
+    "/api/v1/orders?pos_id=...": "200 (401 supprimé)",
+    "/api/v1/catalog/products": "200 avec 12 produits",
+    "/api/v1/catalog/categories": "200 avec 3 catégories"
+  },
+  "instruction_interface": "Recharger le navigateur (Ctrl+F5). Le frontend fait un appel GET /api/v1/catalog/products qui retourne les 12 produits et 3 catégories. Les produits s'affichent dans la grille du POS (section gauche)."
+}

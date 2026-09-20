@@ -1,0 +1,13 @@
+{
+  "page_connexion": "LoginView.tsx créee et intégrée dans App.tsx",
+  "endpoint_corrige": "/api/v1/auth/login-pin (router.py : prefix corrigé)",
+  "auth_backend": "login-pin accepte pos_id + pin_code, retourne access_token + user",
+  "frontend_auth": "LoginView envoie axios.post au backend, stocke token dans localStorage, passe onLoginSuccess à App",
+  "catalogue_corrige": "catalog.py : ProductSchema corrigé (base_price, is_active, tax_rate)",
+  "tests_termines": [
+    "Données de test insérées (12 produits, 3 catégories, commande, paiement)",
+    "Backend : endpoints /orders, /payments, /catalog, /auth, /sessions fonctionnels",
+    "Frontend : POSView (catalogue + panier + paiement), KitchenView (KDS), LoginView (connexion)"
+  ],
+  "lancement": "cd backend && uvicorn main:app --reload  //  cd frontend && npm run dev"
+}

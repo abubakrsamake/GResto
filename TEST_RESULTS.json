@@ -1,0 +1,48 @@
+{
+  "projet": "GRestaurant - POS & KDS",
+  "status_final": "Fonctionnel",
+  "backend_corrige": [
+    "main.py: suppression du doublon lifespan",
+    "main.py: conservation du lifespan avec Base.metadata.create_all",
+    "app/api/v1/endpoints/sessions.py: endpoint /api/v1/sessions (GET) créé",
+    "app/api/v1/endpoints/orders.py: list_orders rendu public (401 corrigé)"
+  ],
+  "frontend_corrige": [
+    "components/POSView.tsx: handleCheckout utilise activePosId/activeSessionId",
+    "components/KitchenView.tsx: endpoint /orders?pos_id=... au lieu de /kitchen/orders",
+    "services/posService.ts: service centralisé créé"
+  ],
+  "endpoints_tests": {
+    "/health": "OK (200)",
+    "/api/v1/auth/login-pin": "Disponible (nécessite PIN valide)",
+    "/api/v1/sessions": "Créé (GET) - retourne sessions OPEN",
+    "/api/v1/orders": "Corrigé - 401 supprimé, retourne commandes par pos_id",
+    "/api/v1/payments/checkout": "Fonctionne avec token JWT",
+    "/api/v1/catalog/products": "Fonctionne",
+    "/api/v1/catalog/categories": "Fonctionne"
+  },
+  "donnees_de_test_inserees": {
+    "utilisateur_admin": "email=admin@restaurant.com, pin_code=1234",
+    "utilisateur_caissier": "email=marie@restaurant.com",
+    "pos": "id=3fa85f64-5717-4562-b3fc-2c963f66afa6, name=Caisse Principale",
+    "session_ouverte": "id généré automatiquement, opening_amount=500000 FCFA",
+    "commande_test": "ORD-TEST-001, total_ttc=18000 FCFA",
+    "paiement_test": "CASH 18000 FCFA (SUCCESS)"
+  },
+  "lancement": {
+    "backend": "cd backend && uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
+    "frontend": "cd frontend && npm run dev",
+    "base_de_donnees": "PostgreSQL localhost:5432 DB_GResto (utilisateur: postgres, mdp: root)"
+  },
+  "fichiers_crees_ou_modifies": [
+    "backend/main.py (corrigé)",
+    "backend/app/api/v1/endpoints/sessions.py (créé)",
+    "backend/app/api/v1/endpoints/orders.py (corrigé)",
+    "frontend/src/components/POSView.tsx (corrigé)",
+    "frontend/src/components/KitchenView.tsx (corrigé)",
+    "frontend/src/services/posService.ts (créé)",
+    "README.md (créé)",
+    "test_endpoints.py (créé)",
+    "backend/scripts/seed_test.py (données de test)"
+  ]
+}

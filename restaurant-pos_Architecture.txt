@@ -1,0 +1,102 @@
+restaurant-pos/
+│
+├── docker-compose.yml              # Services Docker (PostgreSQL, Adminer, Redis)
+├── README.md
+├── .gitignore
+│
+├── backend/                        # 1. API SERVER (FastAPI + PostgreSQL)
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       ├── router.py       # Configuration globale des routes v1
+│   │   │       └── endpoints/
+│   │   │           ├── auth.py     # Login, refresh token, PIN caissier
+│   │   │           ├── users.py    # CRUD Utilisateurs & Rôles
+│   │   │           ├── pos.py      # Points de vente & Caisses
+│   │   │           ├── products.py # Catalogue, Catégories, Variantes
+│   │   │           ├── orders.py   # Prise de commande & Paiements
+│   │   │           └── kds.py      # WebSockets pour l'écran Cuisine
+│   │   │
+│   │   ├── core/
+│   │   │   ├── config.py           # Variables d'environnement (Settings)
+│   │   │   ├── database.py         # Connexion PostgreSQL Async SQLAlchemy
+│   │   │   ├── security.py         # Hachage mots de passe, JWT Tokens
+│   │   │   └── rbac.py             # Middleware / Décorateurs de contrôle des rôles
+│   │   │
+│   │   ├── models/                 # Modèles de données SQLAlchemy (DB Tables)
+│   │   │   ├── user.py             # Users, Roles, UserPosAccess
+│   │   │   ├── pos.py              # PointsOfSale, Registers, Sessions
+│   │   │   ├── product.py          # Products, Categories, Modifiers
+│   │   │   └── order.py            # Orders, OrderItems, Payments
+│   │   │
+│   │   ├── schemas/                # Schémas de validation Pydantic v2
+│   │   │   ├── user.py
+│   │   │   ├── pos.py
+│   │   │   ├── product.py
+│   │   │   └── order.py
+│   │   │
+│   │   ├── services/               # Logique métier lourde
+│   │   │   ├── print_service.py    # Logique de génération des reçus
+│   │   │   └── stock_service.py    # Gestion et décrémentation des stocks
+│   │   │
+│   │   └── main.py                 # Point d'entrée de l'API FastAPI
+│   │
+│   ├── alembic/                    # Script de migrations de la base de données
+│   ├── alembic.ini
+│   ├── requirements.txt            # Dépendances Python Backend
+│   └── Dockerfile
+│
+├── frontend/                       # 2. APPLICATION REACT (Web & POS UI)
+│   ├── public/                     # Favicons, sons de notification commande
+│   ├── src/
+│   │   ├── assets/                 # Images, logos, icônes SVG
+│   │   ├── components/             # Composants UI réutilisables
+│   │   │   ├── common/             # Boutons, Modales, Inputs, Badges
+│   │   │   ├── layout/             # Navbar, Sidebar, Layout Admin/POS
+│   │   │   └── pos/                # CartGrid, ProductCard, PaymentModal
+│   │   │
+│   │   ├── features/               # Modules fonctionnels par domaine
+│   │   │   ├── auth/               # Écran Login / Code PIN
+│   │   │   ├── pos-terminal/       # Interface tactile de vente
+│   │   │   ├── kitchen-kds/        # Interface temps réel de la cuisine
+│   │   │   ├── products-admin/     # Gestion du catalogue
+│   │   │   └── sales-reports/      # Dashboard et statistiques de caisse
+│   │   │
+│   │   ├── hooks/                  # Hooks personnalisés
+│   │   │   ├── usePywebview.ts     # Pont vers les fonctions natives Python
+│   │   │   ├── useWebSocket.ts     # Connexion temps réel pour les commandes
+│   │   │   └── useCart.ts          # Manipulation du panier POS
+│   │   │
+│   │   ├── services/               # Communications HTTP avec FastAPI (Axios / Fetch)
+│   │   │   ├── api.ts              # Configuration Axios globale (Interceptors JWT)
+│   │   │   ├── authService.ts
+│   │   │   ├── posService.ts
+│   │   │   └── orderService.ts
+│   │   │
+│   │   ├── store/                  # Gestion d'état global
+│   │   │   ├── cartStore.ts        # Zustand : Panier de caisse actif
+│   │   │   └── posStore.ts         # Zustand : Session de caisse active
+│   │   │
+│   │   ├── types/                  # Interfaces et Types TypeScript
+│   │   │   ├── index.ts
+│   │   │   └── pywebview.d.ts      # Typage de window.pywebview.api
+│   │   │
+│   │   ├── App.tsx                 # Déclaration des Routes (React Router)
+│   │   ├── main.tsx                # Point d'entrée React
+│   │   └── index.css               # Configuration Tailwind CSS
+│   │
+│   ├── index.html
+│   ├── package.json                # Dépendances NPM
+│   ├── vite.config.ts              # Configuration Vite
+│   └── tailwind.config.js
+│
+└── desktop/                        # 3. WRAPPER DESKTOP PYWEBVIEW (Executables POS)
+    ├── hardware/
+    │   ├── __init__.py
+    │   ├── printer.py              # Driver impression thermique ESC/POS
+    │   └── cash_drawer.py          # Commande d'ouverture du tiroir-caisse
+    │
+    ├── api.py                      # Classe Python POSHardwareAPI exposée à React
+    ├── main.py                     # Script principal pywebview (lance la fenêtre)
+    ├── build.py                    # Script de compilation avec PyInstaller / Nuitka
+    └── requirements.txt            # Dépendances (pywebview, python-escpos, etc.)
