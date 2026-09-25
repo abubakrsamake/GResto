@@ -30,6 +30,7 @@ export interface InvoiceData {
 export interface InvoiceViewProps extends InvoiceData {
   data?: InvoiceData; // Support de la prop `data`
   onClose?: () => void;
+  onPrint?: () => void;
 }
 
 export default function InvoiceView(props: InvoiceViewProps) {
@@ -49,6 +50,7 @@ export default function InvoiceView(props: InvoiceViewProps) {
   } = source;
 
   const onClose = props.onClose;
+  const onPrint = props.onPrint;
 
   const now = date ? new Date(date) : new Date();
   const formattedDate = now.toLocaleDateString('fr-FR', {
@@ -181,8 +183,9 @@ export default function InvoiceView(props: InvoiceViewProps) {
 
           <div className="pt-2 flex gap-2">
             <button
-              onClick={() => window.print()}
-              className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
+              onClick={onPrint}
+              disabled={!onPrint}
+              className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
             >
               <Printer className="h-4 w-4" /> Imprimer
             </button>

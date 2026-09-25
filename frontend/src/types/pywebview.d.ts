@@ -24,7 +24,11 @@ declare global {
       api: {
         print_receipt: (data: OrderPrintData) => Promise<{ success: boolean; message?: string }>;
         open_cash_drawer: () => Promise<{ success: boolean; error?: string }>;
-        print_order_receipt?: (orderId: string, token: string) => Promise<void>;
+        print_order_receipt?: (orderId: string, token: string) => Promise<{
+          success: boolean;
+          message?: string;
+          error?: string;
+        }>;
       };
     };
   }

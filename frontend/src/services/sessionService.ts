@@ -3,6 +3,7 @@ import api from './api';
 export interface Register {
   id: string;
   name: string;
+  pos_id?: string;
   is_active?: boolean;
 }
 export interface RegisterSession {

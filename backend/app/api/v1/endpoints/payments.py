@@ -87,6 +87,12 @@ async def process_checkout(
     if remaining_due <= Decimal("0.00"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La commande est déjà réglée.")
 
+    if payload.amount_tendered < remaining_due:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le montant reçu est insuffisant pour régler le solde de la commande.",
+        )
+
     # 3. Calculer le montant effectif appliqué au paiement et le rendu de monnaie
     amount_applied = min(payload.amount_tendered, remaining_due)
     change_given = Decimal("0.00")

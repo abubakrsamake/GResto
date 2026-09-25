@@ -88,7 +88,7 @@ async def login_pin(
         .where(
             User.is_active == True,
             Role.code == "CASHIER",
-            PointOfSale.id == payload.pos_id
+            PointOfSale.id == payload.pos_id,
         )
     )
     result = await db.execute(stmt)
@@ -116,13 +116,18 @@ async def login_pin(
 
     authenticated_user: User | None = matching_cashiers[0] if matching_cashiers else None
 
-    # Si aucun caissier ne matche, autoriser le SuperAdmin sur le POS en secours
+    # Le PIN SuperAdmin n'est accepté que sur un poste qui lui est attribué.
     if not authenticated_user:
         admin_stmt = (
             select(User)
             .join(User.role)
+            .join(User.points_of_sale)
             .options(selectinload(User.role), selectinload(User.points_of_sale))
-            .where(User.is_active == True, Role.code == "SUPERADMIN")
+            .where(
+                User.is_active == True,
+                Role.code == "SUPERADMIN",
+                PointOfSale.id == payload.pos_id,
+            )
         )
         admin_result = await db.execute(admin_stmt)
         admins = admin_result.scalars().unique().all()

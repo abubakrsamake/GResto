@@ -1,16 +1,17 @@
 import uuid
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.models import Order, OrderItem
 from app.core.models import User
+from app.services.order_workflow import can_transition_order_status
 
 router = APIRouter()
 
@@ -22,9 +23,10 @@ router = APIRouter()
 class KDSOrderItemSchema(BaseModel):
     id: uuid.UUID
     product_name: str
+    variant_name: Optional[str] = None
     quantity: int
     notes: Optional[str] = None
-    status: str  # "PENDING", "PREPARING", "READY"
+    status: str = Field(validation_alias="item_status")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,13 +39,13 @@ class KDSOrderSchema(BaseModel):
     status: str  # "PENDING", "PREPARING", "READY", "SERVED"
     created_at: datetime
     elapsed_minutes: Optional[int] = None
-    items: List[KDSOrderItemSchema] = []
+    items: List[KDSOrderItemSchema] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class StatusUpdatePayload(BaseModel):
-    status: str  # Exemple: "PREPARING", "READY", "SERVED", "CANCELLED"
+    status: Literal["PENDING", "PREPARING", "READY", "SERVED", "CANCELLED"]
 
 
 # ==========================================
@@ -70,10 +72,19 @@ async def get_kitchen_orders(
         .where(Order.status.in_(statuses))
     )
 
-    if pos_id:
+    role_code = getattr(current_user.role, "code", None)
+    if role_code not in {"ADMIN", "SUPERADMIN"}:
+        allowed_pos_ids = {point.id for point in current_user.points_of_sale}
+        if pos_id and pos_id not in allowed_pos_ids:
+            raise HTTPException(status_code=403, detail="Cuisine inaccessible pour ce poste.")
+        if pos_id:
+            stmt = stmt.where(Order.pos_id == pos_id)
+        elif allowed_pos_ids:
+            stmt = stmt.where(Order.pos_id.in_(allowed_pos_ids))
+        else:
+            return []
+    elif pos_id:
         stmt = stmt.where(Order.pos_id == pos_id)
-    elif getattr(current_user.role, "code", None) not in {"ADMIN", "SUPERADMIN"}:
-        stmt = stmt.where(Order.pos_id.in_(pos.id for pos in current_user.points_of_sale))
 
     stmt = stmt.order_by(Order.created_at.asc())
 
@@ -116,6 +127,11 @@ async def update_order_status(
             and order.pos_id not in {pos.id for pos in current_user.points_of_sale}):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Commande inaccessible pour cet utilisateur.")
 
+    if payload.status not in {"PREPARING", "READY", "SERVED", "CANCELLED"}:
+        raise HTTPException(status_code=400, detail="Statut de commande invalide.")
+    if not can_transition_order_status(order.status, payload.status):
+        raise HTTPException(status_code=409, detail="Transition de statut de commande invalide.")
+
     order.status = payload.status
     await db.commit()
     await db.refresh(order)
@@ -151,13 +167,15 @@ async def update_order_item_status(
             and item.order.pos_id not in {pos.id for pos in current_user.points_of_sale}):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Article inaccessible pour cet utilisateur.")
 
-    item.status = payload.status
+    if payload.status not in {"PENDING", "PREPARING", "READY"}:
+        raise HTTPException(status_code=400, detail="Statut d'article invalide.")
+    item.item_status = payload.status
     await db.commit()
 
     return {
         "message": "Statut de l'article mis à jour",
         "item_id": item.id,
-        "new_status": item.status
+        "new_status": item.item_status
     }
 
 

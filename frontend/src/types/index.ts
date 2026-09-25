@@ -73,10 +73,10 @@ export interface Order {
   items?: Array<{
     id?: IdLike;
     product_name?: string;
+    variant_name?: string | null;
     quantity?: number;
     unit_price?: number | string;
     total_price?: number | string;
-    variant_name?: string | null;
     modifiers?: Array<{ id: IdLike; name: string; price?: number | string }> | null;
     notes?: string | null;
   }>;

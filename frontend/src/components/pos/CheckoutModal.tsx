@@ -1,5 +1,6 @@
 import { X, Banknote, CreditCard, Delete, RotateCcw, Printer } from 'lucide-react';
 
+
 interface CheckoutModalProps {
   total: number;
   amountTendered: string;

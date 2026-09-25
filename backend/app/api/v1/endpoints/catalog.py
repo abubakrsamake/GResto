@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.core.models import ModifierGroup, Product, Category
+from app.core.models import ModifierGroup, Product, ProductVariant, Category
 from app.core.dependencies import get_current_user, require_roles
 
 # Importation directe de vos schémas catalog.py
@@ -53,6 +53,7 @@ def get_product_options():
     return [
         selectinload(Product.category),
         selectinload(Product.modifier_groups).selectinload(ModifierGroup.modifiers),
+        selectinload(Product.variants),
     ]
 
 # --- Endpoints Catégories ---
@@ -98,9 +99,17 @@ async def create_product(
             detail="La catégorie spécifiée n'existe pas.",
         )
 
+    variant_names = [variant.name.strip().casefold() for variant in product_in.variants]
+    if len(variant_names) != len(set(variant_names)):
+        raise HTTPException(status_code=400, detail="Les noms de variantes doivent être uniques.")
+
     # 2. Création de l'instance du produit
-    product_data = product_in.model_dump(exclude={"modifier_group_ids"})
+    product_data = product_in.model_dump(exclude={"modifier_group_ids", "variants"})
     new_product = Product(**product_data)
+    new_product.variants = [
+        ProductVariant(name=variant.name.strip(), price_override=variant.price_override)
+        for variant in product_in.variants
+    ]
     
     db.add(new_product)
     await db.flush()  # Génère l'ID en base sans finaliser la transaction
@@ -158,6 +167,8 @@ async def update_product(
         raise HTTPException(status_code=404, detail="Produit introuvable.")
 
     update_data = product_in.model_dump(exclude_unset=True)
+    variants = product_in.variants if "variants" in update_data else None
+    update_data.pop("variants", None)
     
     # Traitement de la relation Many-to-Many
     if "modifier_group_ids" in update_data:
@@ -169,6 +180,15 @@ async def update_product(
                 product.modifier_groups = list(groups_result.scalars().all())
             else:
                 product.modifier_groups = []  # Vider les groupes si un tableau vide est transmis
+
+    if variants is not None:
+        variant_names = [variant.name.strip().casefold() for variant in variants]
+        if len(variant_names) != len(set(variant_names)):
+            raise HTTPException(status_code=400, detail="Les noms de variantes doivent être uniques.")
+        product.variants = [
+            ProductVariant(name=variant.name.strip(), price_override=variant.price_override)
+            for variant in variants
+        ]
     
     # Mise à jour des autres champs scalaires
     for field, value in update_data.items():

@@ -176,6 +176,25 @@ class Product(Base):
     category: Mapped["Category"] = relationship(back_populates="products")
     modifier_groups: Mapped[List["ModifierGroup"]] = relationship(secondary=product_modifier_groups, back_populates="products")
     pos_prices: Mapped[List["POSProductPrice"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    variants: Mapped[List["ProductVariant"]] = relationship(
+        back_populates="product", cascade="all, delete-orphan"
+    )
+
+
+class ProductVariant(Base):
+    __tablename__ = "product_variants"
+    __table_args__ = (
+        UniqueConstraint("product_id", "name", name="uq_product_variant_name"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    price_override: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
+    product: Mapped["Product"] = relationship(back_populates="variants")
 
 
 class POSProductPrice(Base):
@@ -272,6 +291,7 @@ class OrderItem(Base):
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False)
     product_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    variant_name: Mapped[Optional[str]] = mapped_column(String(100))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, default=1)

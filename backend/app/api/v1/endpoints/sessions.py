@@ -6,10 +6,11 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.core.models import RegisterSession, User, Order
+from app.core.models import Order, Payment, Register, RegisterSession, User
 
 from app.schemas.register_session import (
     SessionOpenRequest,
@@ -18,6 +19,24 @@ from app.schemas.register_session import (
 )
 
 router = APIRouter(tags=["Sessions"])
+
+
+def _can_access_pos(current_user: User, pos_id: uuid.UUID) -> bool:
+    if getattr(current_user.role, "code", None) in {"ADMIN", "SUPERADMIN"}:
+        return True
+    return pos_id in {point.id for point in current_user.points_of_sale}
+
+
+async def _paid_total_for_session(session_id: uuid.UUID, db: AsyncSession) -> Decimal:
+    stmt = (
+        select(func.coalesce(func.sum(Payment.amount), Decimal("0.00")))
+        .join(Order, Payment.order_id == Order.id)
+        .where(
+            Order.register_session_id == session_id,
+            Payment.status == "SUCCESS",
+        )
+    )
+    return (await db.execute(stmt)).scalar() or Decimal("0.00")
 
 
 @router.get(
@@ -35,22 +54,17 @@ async def get_session(
     except ValueError:
         raise HTTPException(status_code=400, detail="ID de session invalide")
 
-    stmt = select(RegisterSession).where(RegisterSession.id == sid)
+    stmt = select(RegisterSession).options(
+        selectinload(RegisterSession.register)
+    ).where(RegisterSession.id == sid)
     res = await db.execute(stmt)
     session = res.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Session non trouvée")
+    if not _can_access_pos(current_user, session.register.pos_id):
+        raise HTTPException(status_code=403, detail="Session inaccessible pour cet utilisateur.")
 
-    # Calcul du montant attendu
-    orders_stmt = select(Order).where(
-        Order.register_session_id == sid, Order.status != "CANCELLED"
-    )
-    orders_res = await db.execute(orders_stmt)
-    orders = orders_res.scalars().all()
-    
-    # On peut attacher directement les valeurs dynamiques à l'objet ORM avant validation Pydantic
-    session.expected_amount = sum((o.total_ttc for o in orders), Decimal("0.00"))
-    session.order_count = len(orders)
+    session.expected_amount = session.opening_amount + await _paid_total_for_session(sid, db)
 
     return session
 
@@ -65,6 +79,12 @@ async def open_session(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    register = await db.get(Register, payload.register_id)
+    if not register:
+        raise HTTPException(status_code=404, detail="Caisse introuvable.")
+    if not _can_access_pos(current_user, register.pos_id):
+        raise HTTPException(status_code=403, detail="Caisse inaccessible pour cet utilisateur.")
+
     existing = await db.execute(
         select(RegisterSession).where(
             RegisterSession.register_id == payload.register_id,
@@ -109,7 +129,9 @@ async def close_session(
 ):
     session_uuid = payload.session_id
 
-    stmt = select(RegisterSession).where(
+    stmt = select(RegisterSession).options(
+        selectinload(RegisterSession.register)
+    ).where(
         RegisterSession.id == session_uuid,
         RegisterSession.status == "OPEN",
     )
@@ -122,15 +144,10 @@ async def close_session(
             detail="Session ouverte non trouvée."
         )
 
-    # 1. Calcul du montant total attendu
-    orders_stmt = select(
-        func.coalesce(func.sum(Order.total_ttc), Decimal("0.00"))
-    ).where(
-        Order.register_session_id == session_uuid,
-        Order.status != "CANCELLED",
-    )
-    orders_res = await db.execute(orders_stmt)
-    expected = orders_res.scalar()
+    if not _can_access_pos(current_user, session.register.pos_id):
+        raise HTTPException(status_code=403, detail="Session inaccessible pour cet utilisateur.")
+
+    expected = session.opening_amount + await _paid_total_for_session(session_uuid, db)
 
     # 2. Mise à jour des données (utilisez utcnow sans tzinfo si le champ PostgreSQL est TIMESTAMP WITHOUT TIME ZONE)
     session.status = "CLOSED"
@@ -149,7 +166,7 @@ async def close_session(
             detail=f"Erreur de clôture BDD: {str(e)}",
         )
 
-    # 3. Réaffectation manuelle de expected_amount pour la réponse Pydantic
+    # Réaffectation manuelle de expected_amount pour la réponse Pydantic
     session.expected_amount = expected
 
     return session
@@ -164,7 +181,14 @@ async def list_open_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    stmt = select(RegisterSession).where(RegisterSession.status == "OPEN")
+    stmt = select(RegisterSession).options(
+        selectinload(RegisterSession.register)
+    ).where(RegisterSession.status == "OPEN")
+    if getattr(current_user.role, "code", None) not in {"ADMIN", "SUPERADMIN"}:
+        allowed_pos_ids = [point.id for point in current_user.points_of_sale]
+        if not allowed_pos_ids:
+            return []
+        stmt = stmt.join(Register).where(Register.pos_id.in_(allowed_pos_ids))
     result = await db.execute(stmt)
     sessions = result.scalars().all()
     return sessions

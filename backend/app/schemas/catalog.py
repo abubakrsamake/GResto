@@ -92,6 +92,20 @@ class ProductBase(BaseSchema):
     def normalize_optional_text_fields(cls, value):
         return _normalize_optional_text(value)
 
+
+class ProductVariantInput(BaseSchema):
+    name: str = Field(..., min_length=1, max_length=100)
+    price_override: Decimal = Field(..., gt=0)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_variant_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class ProductVariantResponse(ProductVariantInput, UUIDMixin):
+    pass
+
 # Schema partiel pour la mise à jour (PUT)
 class ProductUpdate(BaseSchema):
     name: Optional[str] = None
@@ -103,6 +117,7 @@ class ProductUpdate(BaseSchema):
     is_active: Optional[bool] = None
     category_id: Optional[uuid.UUID] = None
     modifier_group_ids: Optional[list[uuid.UUID]] = None
+    variants: Optional[list[ProductVariantInput]] = None
 
     @field_validator("name", "sku", "description", "image_url", mode="before")
     @classmethod
@@ -114,10 +129,19 @@ class ProductUpdate(BaseSchema):
 class ProductCreate(ProductBase):
     category_id: uuid.UUID
     modifier_group_ids: list[uuid.UUID] = Field(default_factory=list)
+    variants: list[ProductVariantInput] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_unique_variant_names(self):
+        names = [variant.name.casefold() for variant in self.variants]
+        if len(names) != len(set(names)):
+            raise ValueError("Les noms de variantes doivent être uniques.")
+        return self
 
 
 class ProductResponse(ProductBase, UUIDMixin, TimestampMixin):
     category: CategoryResponse
     modifier_groups: list[ModifierGroupResponse] = Field(default_factory=list)
+    variants: list[ProductVariantResponse] = Field(default_factory=list)
     
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)

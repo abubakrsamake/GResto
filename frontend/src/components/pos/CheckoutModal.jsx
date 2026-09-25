@@ -11,9 +11,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function CheckoutModal({ isOpen, onClose, order, userToken, onPaymentSuccess }) {
-  if (!isOpen || !order) return null;
-
-  const totalAmount = Number(order.total_ttc) || 0;
+  const totalAmount = Number(order?.total_ttc) || 0;
 
   // --- États ---
   const [paymentMethod, setPaymentMethod] = useState("CASH"); // CASH, CREDIT_CARD, MOBILE_MONEY
@@ -25,12 +23,15 @@ export default function CheckoutModal({ isOpen, onClose, order, userToken, onPay
 
   // Réinitialiser les états quand le modal s'ouvre avec une nouvelle commande
   useEffect(() => {
+    if (!isOpen || !order) return;
     setAmountTendered(totalAmount.toString());
     setPaymentMethod("CASH");
     setReferenceCode("");
     setCheckoutResult(null);
     setErrorMessage("");
   }, [order, totalAmount]);
+
+  if (!isOpen || !order) return null;
 
   // --- Calculs ---
   const numericTendered = parseFloat(amountTendered) || 0;

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { posService } from '../../services/posService';
 import paymentService from '../../services/paymentService';
+import sessionService from '../../services/sessionService';
+import authService from '../../services/authService';
 import CustomizationModal from './CustomizationModal';
 import InvoiceView from '../common/InvoiceView';
 import { usePosStore,  } from '../../store/usePosStore';
@@ -28,9 +30,10 @@ export default function POSView() {
   const [loading, setLoading] = useState<boolean>(false);
   
   // États du POS et de la session
-  const [activePosId] = useState<string>('ac5a66d4-42c3-4347-a7e7-969d7beef108');
-  const [activeSessionId] = useState<string>('299238eb-c0f8-433d-82ec-b9cab3ba69b9');
-  const [orderType] = useState<'DINE_IN' | 'TAKEOUT'>('DINE_IN');
+  const [activePosId, setActivePosId] = useState<string>(() => localStorage.getItem('active_pos_id') || '');
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [checkoutSetupError, setCheckoutSetupError] = useState('');
+  const [orderType] = useState<'DINE_IN' | 'TAKEAWAY'>('DINE_IN');
 
   // États des modals
   const [showInvoice, setShowInvoice] = useState(false);
@@ -39,6 +42,7 @@ export default function POSView() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [amountTendered, setAmountTendered] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'MOBILE_MONEY'>('CASH');
+  const [receiptPrintError, setReceiptPrintError] = useState('');
 
   // Modal de personnalisation
   const [selectedProductForOptions, setSelectedProductForOptions] = useState<Product | null>(null);
@@ -51,6 +55,48 @@ export default function POSView() {
 
   useEffect(() => {
     fetchCatalog();
+  }, []);
+
+  useEffect(() => {
+    const loadActiveRegisterSession = async () => {
+      try {
+        let posId = localStorage.getItem('active_pos_id') || activePosId;
+        if (!posId) {
+          const currentUser = await authService.getCurrentUser();
+          posId = currentUser.pos_ids?.[0] || '';
+          if (posId) localStorage.setItem('active_pos_id', posId);
+        }
+
+        if (!posId) {
+          setCheckoutSetupError('Aucun poste de vente n’est associé à cette connexion. Déconnectez-vous puis reconnectez-vous en choisissant un poste.');
+          return;
+        }
+
+        setActivePosId(posId);
+        const [registers, sessions] = await Promise.all([
+          sessionService.getRegisters(),
+          sessionService.listOpen(),
+        ]);
+        const registerIds = new Set(
+          registers.filter((register) => register.pos_id === posId).map((register) => register.id),
+        );
+        const activeSession = sessions.find(
+          (session) => session.status === 'OPEN' && session.register_id && registerIds.has(session.register_id),
+        );
+
+        if (!activeSession) {
+          setCheckoutSetupError('Aucune session de caisse ouverte pour ce poste. Ouvrez une session dans « Clôtures » avant de créer une commande.');
+          return;
+        }
+
+        setActiveSessionId(activeSession.id);
+        setCheckoutSetupError('');
+      } catch (error: any) {
+        setCheckoutSetupError(error.response?.data?.detail || 'Impossible de vérifier la session de caisse active.');
+      }
+    };
+
+    loadActiveRegisterSession();
   }, []);
 
   const fetchCatalog = async () => {
@@ -115,8 +161,13 @@ export default function POSView() {
     return palette[hash % palette.length];
   };
 
-  const tax = subtotal * 0.18;
-  const total = subtotal + tax;
+  const tax = cart.reduce((taxTotal, item) => {
+    const lineTotal = item.unit_price * item.quantity;
+    const rate = Number(item.product.tax_rate || 0);
+    return taxTotal + (rate > 0 ? lineTotal - lineTotal / (1 + rate / 100) : 0);
+  }, 0);
+  const total = subtotal;
+  const subtotalHT = total - tax;
 
   // Gestion du Clavier Numérique
   const handleNumpadInput = (value: string) => {
@@ -134,60 +185,97 @@ export default function POSView() {
     setAmountTendered((current + extra).toString());
   };
 
-  const handleCheckout = async (): Promise<void> => {
-    try {
-      // 1. Créer la commande via l'API centralisée
-      const orderPayload = {
-        pos_id: activePosId,
-        register_session_id: activeSessionId,
-        order_type: orderType,
-        items: cart.map(i => ({
-          product_id: i.product.id,
-          variant_id: i.selected_variant?.id || null,
-          modifiers: i.selected_modifiers.map(m => ({ modifier_id: m.id, modifier_name: m.name, price: m.price })),
-          quantity: i.quantity,
-          notes: i.notes || ''
+const handleCheckout = async (): Promise<void> => {
+  try {
+    if (!activePosId || !activeSessionId) {
+      throw new Error(checkoutSetupError || 'Aucune session de caisse ouverte pour ce poste.');
+    }
+    if (paymentMethod === 'CASH' && (parseFloat(amountTendered) || 0) < total) {
+      throw new Error('Le montant reçu est insuffisant pour régler la commande.');
+    }
+
+    const orderPayload = {
+      pos_id: activePosId,
+      register_session_id: activeSessionId,
+      order_type: orderType as 'DINE_IN' | 'TAKEOUT', // 👈 Correction TypeScript ici
+      items: cart.map(i => ({
+        product_id: i.product.id,
+        variant_id: i.selected_variant?.id || null,
+        quantity: i.quantity,
+        notes: i.notes || '',
+        modifiers: i.selected_modifiers.map(m => ({
+          modifier_id: m.id
         }))
-      };
+      }))
+    };
 
-      const orderRes = await posService.createOrder(orderPayload);
-      const orderId = orderRes.id;
+    // 2. Création de la commande
+    const orderRes = await posService.createOrder(orderPayload);
+    const orderId = orderRes.id;
 
-      // 2. Traitement du paiement
-      const tenderedVal = parseFloat(amountTendered) || total;
-      const paymentRes = await paymentService.processPayment({
-        order_id: orderId,
-        payment_method: paymentMethod,
-        amount_tendered: tenderedVal
-      });
+    // 3. Traitement du paiement
+    const serverTotal = Number(orderRes.total_ttc);
+    const tenderedVal = parseFloat(amountTendered) || serverTotal;
+    const paymentRes = await paymentService.processPayment({
+      order_id: orderId,
+      payment_method: paymentMethod,
+      amount_tendered: tenderedVal
+    });
 
-      // 3. Impression via le bridge desktop unique
-      if (!window.pywebview?.api?.print_order_receipt) {
-        throw new Error('Le système d’impression desktop n’est pas disponible.');
+    setLastOrderInfo({
+      orderId: orderId,
+      items: orderRes.items.map((item: any) => ({
+        name: item.variant_name ? `${item.product_name} (${item.variant_name})` : item.product_name,
+        qty: item.quantity,
+        total: Number(item.subtotal_ttc),
+      })),
+      subtotal: Number(orderRes.total_ht),
+      tax: Number(orderRes.total_tax),
+      total: serverTotal,
+      paymentMethod,
+      amountTendered: tenderedVal,
+      changeGiven: paymentRes.change_given,
+    });
+
+    setReceiptPrintError('');
+    setShowInvoice(true);
+    clearCart();
+    setIsCheckoutOpen(false);
+    setAmountTendered('');
+
+    const token = authService.getAccessToken();
+    if (!token || !window.pywebview?.api?.print_order_receipt) {
+      setReceiptPrintError('Vente enregistrée, mais le système d’impression desktop est indisponible.');
+      return;
+    }
+    try {
+      const printResult = await window.pywebview.api.print_order_receipt(orderId, token);
+      if (!printResult.success) {
+        setReceiptPrintError(printResult.error || 'Vente enregistrée, mais le ticket n’a pas pu être imprimé.');
       }
+    } catch (printError: any) {
+      setReceiptPrintError(printError.message || 'Vente enregistrée, mais le ticket n’a pas pu être imprimé.');
+    }
+  } catch (err: any) {
+    const msg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Erreur lors de la commande';
+    alert("Erreur lors de la commande : " + msg);
+  }
+};
 
-      await window.pywebview.api.print_order_receipt(orderId, 'TOKEN');
-
-      setLastOrderInfo({
-        orderId: orderId,
-        items: cart.map(i => ({ name: i.product.name + (i.selected_variant ? ` (${i.selected_variant.name})` : ''), qty: i.quantity, total: i.unit_price * i.quantity })),
-        subtotal,
-        tax: subtotal * 0.18,
-        total: total,
-        paymentMethod,
-        amountTendered: tenderedVal,
-        changeGiven: paymentRes.change_given,
-      });
-      setShowInvoice(true);
-      clearCart();
-      setIsCheckoutOpen(false);
-      setAmountTendered('');
-    } catch (err: any) {
-      const msg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Erreur lors de la commande';
-      alert("Erreur lors de la commande : " + msg);
+  const handleReprintReceipt = async () => {
+    const token = authService.getAccessToken();
+    const orderId = lastOrderInfo?.orderId;
+    if (!token || !orderId || !window.pywebview?.api?.print_order_receipt) {
+      setReceiptPrintError('Impression desktop indisponible.');
+      return;
+    }
+    try {
+      const result = await window.pywebview.api.print_order_receipt(orderId, token);
+      setReceiptPrintError(result.success ? '' : result.error || 'Réimpression impossible.');
+    } catch (error: any) {
+      setReceiptPrintError(error.message || 'Réimpression impossible.');
     }
   };
-
   const calculatedChange = Math.max(0, (parseFloat(amountTendered) || 0) - total);
   
   return (
@@ -276,7 +364,7 @@ export default function POSView() {
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-2">
                   <span className="text-lg md:text-xl font-black text-indigo-400 truncate">
-                    {Number(product.base_price).toLocaleString()} FCFA
+                    {Number(product.base_price).toLocaleString()} FCFA TTC
                   </span>
                   <div className="p-2 bg-indigo-600/20 text-indigo-400 rounded-lg shrink-0">
                     <Plus className="h-5 w-5" />
@@ -358,10 +446,10 @@ export default function POSView() {
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between text-slate-400">
               <span>Sous-total HT</span>
-              <span>{subtotal.toLocaleString()} FCFA</span>
+              <span>{subtotalHT.toLocaleString()} FCFA</span>
             </div>
             <div className="flex justify-between text-slate-400">
-              <span>TVA (18%)</span>
+              <span>TVA produits</span>
               <span>{tax.toLocaleString()} FCFA</span>
             </div>
             <div className="flex justify-between text-lg md:text-xl font-black text-white pt-2 border-t border-slate-800">
@@ -370,8 +458,9 @@ export default function POSView() {
             </div>
           </div>
 
+          {checkoutSetupError && <p role="alert" className="px-4 text-xs text-amber-300">{checkoutSetupError}</p>}
           <button
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || !activeSessionId}
             onClick={() => {
               setAmountTendered('');
               setIsCheckoutOpen(true);
@@ -527,6 +616,7 @@ export default function POSView() {
               </button>
               <button 
                 onClick={handleCheckout} 
+                disabled={paymentMethod === 'CASH' && (parseFloat(amountTendered) || 0) < total}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 font-bold rounded-xl text-white shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition"
               >
                 <Printer className="h-5 w-5" />
@@ -552,7 +642,8 @@ export default function POSView() {
               </button>
             </div>
 
-            <InvoiceView data={lastOrderInfo} />
+            {receiptPrintError && <p role="alert" className="rounded-lg border border-amber-700/50 bg-amber-950/40 p-3 text-sm text-amber-200">{receiptPrintError}</p>}
+            <InvoiceView data={lastOrderInfo} onPrint={handleReprintReceipt} />
 
             <div className="flex gap-3 pt-2">
               <button

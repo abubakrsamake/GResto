@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type ChangeEvent, type SubmitEvent } from 'react';
+import React, { useState, useEffect, type SubmitEvent } from 'react';
 import toast from 'react-hot-toast';
 import { ImagePlus, X } from 'lucide-react';
 import api from '../../services/api';

@@ -17,11 +17,11 @@ export interface AuthUser {
   user_code?: string;
   employee_id?: string;
   is_active?: boolean;
+  pos_ids?: string[];
 }
 
 export interface AuthTokenResponse {
   access_token: string;
-  refresh_token?: string;
   token_type: string;
   user?: AuthUser;
   active_pos_id?: string | null;
@@ -32,20 +32,22 @@ export const authService = {
     localStorage.setItem('access_token', data.access_token);
     localStorage.setItem('token', data.access_token);
 
-    if (data.refresh_token) {
-      localStorage.setItem('refresh_token', data.refresh_token);
-    }
-
     if (data.user) {
       localStorage.setItem('user', JSON.stringify(data.user));
+    }
+
+    if (data.active_pos_id) {
+      localStorage.setItem('active_pos_id', data.active_pos_id);
+    } else {
+      localStorage.removeItem('active_pos_id');
     }
   },
 
   clearSession() {
     localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('active_pos_id');
   },
 
   getAccessToken(): string | null {
@@ -92,27 +94,6 @@ export const authService = {
     await api.post('/auth/logout');
   },
 
-  async refreshToken(): Promise<string> {
-    const refreshToken = localStorage.getItem('refresh_token');
-
-    if (!refreshToken) {
-      throw new Error('No refresh token found');
-    }
-
-    const response = await api.post<{ access_token: string; refresh_token?: string }>('/auth/refresh', {
-      refresh_token: refreshToken,
-    });
-
-    const accessToken = response.data.access_token;
-    localStorage.setItem('access_token', accessToken);
-    localStorage.setItem('token', accessToken);
-
-    if (response.data.refresh_token) {
-      localStorage.setItem('refresh_token', response.data.refresh_token);
-    }
-
-    return accessToken;
-  },
 };
 
 export default authService;

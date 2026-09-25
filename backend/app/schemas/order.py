@@ -20,6 +20,7 @@ class OrderItemModifierResponse(UUIDMixin, BaseSchema):
 
 class OrderItemCreate(BaseSchema):
     product_id: uuid.UUID
+    variant_id: uuid.UUID | None = None
     quantity: int = Field(..., gt=0, example=2)
     notes: str | None = Field(None, example="Sans oignons")
     modifiers: list[OrderItemModifierCreate] = Field(default_factory=list)
@@ -28,6 +29,7 @@ class OrderItemCreate(BaseSchema):
 class OrderItemResponse(UUIDMixin, BaseSchema):
     product_id: uuid.UUID
     product_name: str
+    variant_name: str | None = None
     unit_price: Decimal
     tax_rate: Decimal
     quantity: int
@@ -64,7 +66,7 @@ class OrderCreate(BaseSchema):
 
 
 class OrderStatusUpdate(BaseSchema):
-    status: Literal["PENDING", "PREPARING", "IN_PREPARATION", "READY", "SERVED", "CANCELLED", "PAID"]
+    status: Literal["PENDING", "PREPARING", "IN_PREPARATION", "READY", "SERVED", "CANCELLED"]
 
 
 class OrderResponse(UUIDMixin, BaseSchema, TimestampMixin):

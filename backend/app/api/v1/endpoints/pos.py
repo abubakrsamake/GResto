@@ -200,11 +200,20 @@ async def close_register_session(
 @router.get("/session/active/{register_id}", response_model=Optional[RegisterSessionSchema])
 async def get_active_session(
     register_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Récupère la session actuellement ouverte pour une caisse donnée.
     """
+    register = await db.get(Register, register_id)
+    if not register:
+        raise HTTPException(status_code=404, detail="Caisse introuvable.")
+    if getattr(current_user.role, "code", None) not in {"ADMIN", "SUPERADMIN"} and register.pos_id not in {
+        point.id for point in current_user.points_of_sale
+    }:
+        raise HTTPException(status_code=403, detail="Caisse inaccessible pour cet utilisateur.")
+
     stmt = select(RegisterSession).where(
         RegisterSession.register_id == register_id,
         RegisterSession.status == "OPEN"
@@ -220,11 +229,17 @@ async def get_active_session(
 @router.get("/tables/{pos_id}", response_model=List[DiningTableSchema])
 async def get_tables_by_pos(
     pos_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Récupère le plan de salle / la liste des tables associées à un Point de Vente.
     """
+    if getattr(current_user.role, "code", None) not in {"ADMIN", "SUPERADMIN"} and pos_id not in {
+        point.id for point in current_user.points_of_sale
+    }:
+        raise HTTPException(status_code=403, detail="Tables inaccessibles pour cet utilisateur.")
+
     stmt = select(DiningTable).where(DiningTable.pos_id == pos_id)
     result = await db.execute(stmt)
     return result.scalars().all()

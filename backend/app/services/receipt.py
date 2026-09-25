@@ -36,7 +36,8 @@ def generate_text_receipt(order: Order, change_given: Decimal = Decimal("0.00"))
     # Liste des articles
     for item in order.items:
         # Tronquer le nom du produit si trop long
-        p_name = item.product_name[:21]
+        item_name = f"{item.product_name} ({item.variant_name})" if item.variant_name else item.product_name
+        p_name = item_name[:21]
         price_str = f"{item.subtotal_ttc:,.0f}".replace(",", " ")
         lines.append(f"{p_name:<22} {item.quantity:>3} {price_str:>15}")
 

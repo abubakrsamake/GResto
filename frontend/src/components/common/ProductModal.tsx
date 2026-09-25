@@ -1,4 +1,5 @@
-import React, { useState, useEffect, type ChangeEvent, type SubmitEvent } from 'react';import { ImagePlus, X } from 'lucide-react';
+import React, { useState, useEffect, type ChangeEvent, type SubmitEvent } from 'react';
+import { ImagePlus, Plus, Trash2, X } from 'lucide-react';
 import api from '../../services/api';
 import catalogService from '../../services/catalogService';
 import type { Category, Product } from '../../types';
@@ -20,6 +21,11 @@ const DEFAULT_FORM_STATE: Partial<Product> = {
   category_id: '',
 };
 
+interface ProductVariantForm {
+  name: string;
+  price_override: string;
+}
+
 export const ProductModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialData }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [formObj, setFormObj] = useState<Partial<Product>>(DEFAULT_FORM_STATE);
@@ -27,6 +33,7 @@ export const ProductModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, init
   const [error, setError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [variants, setVariants] = useState<ProductVariantForm[]>([]);
 
   const isEdit = Boolean(initialData?.id);
 
@@ -61,12 +68,17 @@ export const ProductModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, init
         category_id: initialData.category_id || initialData.category?.id || '',
       });
       setImagePreview(initialData.image_url || null);
+      setVariants((initialData.variants || []).map((variant) => ({
+        name: variant.name || '',
+        price_override: String(variant.price_override ?? ''),
+      })));
     } else {
       setFormObj({
         ...DEFAULT_FORM_STATE,
         category_id: categories[0]?.id || '',
       });
       setImagePreview(null);
+      setVariants([]);
     }
     setImageFile(null);
     setError(null);
@@ -101,6 +113,10 @@ export const ProductModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, init
       image_url: typeof formObj.image_url === 'string' ? formObj.image_url.trim() || undefined : formObj.image_url,
       base_price: Number(formObj.base_price) || 0,
       tax_rate: Number(formObj.tax_rate) || 0,
+      variants: variants.map((variant) => ({
+        name: variant.name.trim(),
+        price_override: Number(variant.price_override),
+      })),
     };
 
     try {
@@ -124,8 +140,8 @@ export const ProductModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, init
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-2rem)] overflow-y-auto shadow-2xl relative">
         <button 
           onClick={onClose} 
           type="button"
@@ -176,21 +192,70 @@ export const ProductModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, init
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 font-medium">Prix de base (FCFA)</label>
+            <label className="text-xs text-slate-400 font-medium">Prix de base TTC (TVA incluse, FCFA)</label>
             <input
               type="number"
               name="base_price"
               required
-              min="0"
-              step="any"
+              min="0.01"
+              step="0.01"
               value={formObj.base_price ?? ''}
               onChange={handleChange}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400/50"
             />
           </div>
 
+          <section className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-white">Variantes et prix</h4>
+                <p className="text-xs text-slate-500">Prix TTC : chaque variante remplace le prix de base.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVariants((current) => [...current, { name: '', price_override: '' }])}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-bold text-indigo-300 hover:bg-slate-800"
+              >
+                <Plus className="h-3.5 w-3.5" /> Ajouter
+              </button>
+            </div>
+            {variants.length === 0 ? (
+              <p className="text-xs text-slate-500">Aucune variante. Le prix de base sera utilisé.</p>
+            ) : variants.map((variant, index) => (
+              <div key={`${index}-${variant.name}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                <input
+                  required
+                  aria-label={`Nom de la variante ${index + 1}`}
+                  value={variant.name}
+                  onChange={(event) => setVariants((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, name: event.target.value } : entry))}
+                  placeholder="Ex. Petit"
+                  className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                />
+                <input
+                  required
+                  aria-label={`Prix de la variante ${index + 1}`}
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={variant.price_override}
+                  onChange={(event) => setVariants((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, price_override: event.target.value } : entry))}
+                  placeholder="Prix FCFA"
+                  className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setVariants((current) => current.filter((_, entryIndex) => entryIndex !== index))}
+                  aria-label={`Supprimer la variante ${index + 1}`}
+                  className="rounded-lg p-2 text-rose-400 hover:bg-rose-500/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </section>
+
           <div>
-            <label className="text-xs text-slate-400 font-medium">Taux TVA (%)</label>
+            <label className="text-xs text-slate-400 font-medium">Taux TVA applicable (%)</label>
             <input
               type="number"
               name="tax_rate"
@@ -201,6 +266,7 @@ export const ProductModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, init
               onChange={handleChange}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400/50"
             />
+            <p className="mt-1 text-xs text-slate-500">Le prix TTC reste inchangé. À 0 %, aucune TVA n’est extraite du prix.</p>
           </div>
 
           <div>

@@ -39,7 +39,10 @@ async def list_invoices(
             "pos_id": str(o.pos_id) if o.pos_id else None,
             "items": [
                 {
-                    "product_name": item.product_name,
+                    "product_name": (
+                        f"{item.product_name} ({item.variant_name})"
+                        if item.variant_name else item.product_name
+                    ),
                     "quantity": item.quantity,
                     "unit_price": float(item.unit_price) if item.unit_price else 0.0,
                     "total": float(item.subtotal_ttc) if item.subtotal_ttc else 0.0,

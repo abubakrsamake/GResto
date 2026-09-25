@@ -5,7 +5,6 @@ export interface RestaurantSettings {
     restaurantName: string;
     address: string;
     phone: string;
-    taxRate: string;
     currency: string;
     defaultPosId: string;
     printerMode: 'desktop' | 'browser';
@@ -16,7 +15,6 @@ const defaultSettings: RestaurantSettings = {
     restaurantName: 'GRestaurant',
     address: '',
     phone: '',
-    taxRate: '18',
     currency: 'FCFA',
     defaultPosId: '',
     printerMode: 'desktop',
@@ -53,10 +51,7 @@ export default function SettingView({ mode = 'admin' }: SettingViewProps) {
 
     const saveSettings = (event: React.FormEvent) => {
         event.preventDefault();
-        const normalized = {
-            ...settings,
-            taxRate: String(Math.min(100, Math.max(0, Number(settings.taxRate) || 0))),
-        };
+        const normalized = { ...settings };
         localStorage.setItem(settingsKey, JSON.stringify(normalized));
         setSettings(normalized);
         setSaved(true);
@@ -106,9 +101,9 @@ export default function SettingView({ mode = 'admin' }: SettingViewProps) {
                             <div><h3 className="font-bold text-white">Ventes et affichage</h3><p className="text-xs text-slate-500">Valeurs utilisées dans les montants de la caisse.</p></div>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="text-sm text-slate-300">TVA (%)
-                                <input type="number" min="0" max="100" step="0.01" value={settings.taxRate} onChange={(e) => update('taxRate', e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-indigo-500" />
-                            </label>
+                            <p className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-400 sm:col-span-2">
+                                La TVA se règle sur chaque produit. Le prix saisi pour un produit ou une variante est TTC.
+                            </p>
                             <label className="text-sm text-slate-300">Devise
                                 <select value={settings.currency} onChange={(e) => update('currency', e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-indigo-500">
                                     <option>FCFA</option><option>EUR</option><option>USD</option>

@@ -32,7 +32,7 @@ export default function AppShell({
       />
 
       <div className="flex flex-1 min-h-0 w-full overflow-hidden">
-        <Sidebar activeTab={activeTab} onTabChange={onTabChange} role={role} onLogout={onLogout} />
+        <Sidebar activeTab={activeTab} onTabChange={onTabChange} role={role} />
         <main className="flex-1 h-full min-h-0 relative overflow-hidden bg-slate-950 flex flex-col">
           {children}
         </main>

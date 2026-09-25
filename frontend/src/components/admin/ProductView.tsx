@@ -149,7 +149,7 @@ export default function ProductView() {
                 )}
                 <h3 className="font-bold text-white text-base mb-1">{product.name}</h3>
                 <p className="text-sm font-semibold text-amber-400">
-                  {formatPrice(product.base_price)} FCFA
+                  {formatPrice(product.base_price)} FCFA TTC
                 </p>
               </div>
 

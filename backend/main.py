@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -40,6 +41,9 @@ app.add_middleware(
     allow_methods=["*"],    # Autorise GET, POST, PUT, DELETE, OPTIONS, etc.
     allow_headers=["*"],    # Autorise Authorization, Content-Type, etc.
 )
+
+if settings.ENVIRONMENT.lower() == "production":
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 register_exception_handlers(app)
 

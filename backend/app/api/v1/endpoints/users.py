@@ -56,6 +56,11 @@ async def create_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Le rôle spécifié n'existe pas",
         )
+    if role.code == "SUPERADMIN" and getattr(current_user.role, "code", None) != "SUPERADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seul un SUPERADMIN peut créer un compte SUPERADMIN.",
+        )
 
     points_of_sale = []
     if user_in.pos_ids:
@@ -131,6 +136,15 @@ async def update_user(
 
     update_data = user_in.model_dump(exclude_unset=True)
     pos_ids = update_data.pop("pos_ids", None)
+    if "role_id" in update_data:
+        role = await db.get(Role, update_data["role_id"])
+        if not role:
+            raise HTTPException(status_code=404, detail="Le rôle spécifié n'existe pas.")
+        if role.code == "SUPERADMIN" and getattr(current_user.role, "code", None) != "SUPERADMIN":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Seul un SUPERADMIN peut attribuer le rôle SUPERADMIN.",
+            )
     if update_data.get("password"):
         update_data["hashed_password"] = hash_password(update_data.pop("password"))
     else:

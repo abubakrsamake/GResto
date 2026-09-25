@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
-from app.core.models import User  # Ajusté selon vos conventions d'importation
+from app.core.models import PointOfSale, Role, User
 from app.core.security import verify_password
 
 router = APIRouter()
@@ -19,6 +19,7 @@ router = APIRouter()
 
 class PINLoginRequest(BaseModel):
     pin_code: str = Field(..., min_length=4, max_length=6, description="Code PIN du caissier")
+    pos_id: uuid.UUID
 
 
 class CashierResponse(BaseModel):
@@ -50,16 +51,30 @@ async def verify_cashier_pin(
             detail="Le code PIN doit contenir au moins 4 chiffres."
         )
 
-    stmt = select(User).options(selectinload(User.role)).where(
-        User.is_active == True,
-        User.pin_code.is_not(None),
+    stmt = (
+        select(User)
+        .join(User.role)
+        .join(User.points_of_sale)
+        .options(selectinload(User.role))
+        .where(
+            User.is_active == True,
+            User.pin_code.is_not(None),
+            Role.code == "CASHIER",
+            PointOfSale.id == payload.pos_id,
+        )
     )
     result = await db.execute(stmt)
-    user = next(
-        (candidate for candidate in result.scalars().all()
-         if candidate.pin_code and verify_password(payload.pin_code, candidate.pin_code)),
-        None,
-    )
+    matches = [
+        candidate for candidate in result.scalars().unique().all()
+        if candidate.pin_code and verify_password(payload.pin_code, candidate.pin_code)
+    ]
+
+    if len(matches) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce PIN est partagé par plusieurs vendeurs. Utilisez le login PIN avec identification du vendeur.",
+        )
+    user = matches[0] if matches else None
 
     if not user:
         raise HTTPException(

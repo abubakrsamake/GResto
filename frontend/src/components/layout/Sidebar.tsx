@@ -1,14 +1,13 @@
-import { ShoppingCart, ChefHat, Receipt, FileText, Settings, Users, Package, BarChart3, LogOut } from 'lucide-react';
+import { ShoppingCart, ChefHat, Receipt, FileText, Settings, Users, Package, BarChart3 } from 'lucide-react';
 import logoUrl from '../../assets/logo_p.jpg';
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   role: 'CASHIER' | 'SUPERADMIN';
-  onLogout?: () => void;
 }
 
-export default function Sidebar({ activeTab, onTabChange, role, onLogout }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange, role }: SidebarProps) {
   const cashierTabs = [
     { key: 'POS', label: 'Caisse', icon: ShoppingCart },
     { key: 'KDS', label: 'Cuisine', icon: ChefHat },
@@ -26,15 +25,6 @@ export default function Sidebar({ activeTab, onTabChange, role, onLogout }: Side
   ];
 
   const tabs = role === 'SUPERADMIN' ? adminTabs : cashierTabs;
-
-  const handleLogoutClick = () => {
-    if (onLogout) {
-      onLogout();
-    } else {
-      localStorage.removeItem('token');
-      window.location.reload();
-    }
-  };
 
   return (
     <aside className="w-20 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 shrink-0 h-full">
@@ -62,16 +52,6 @@ export default function Sidebar({ activeTab, onTabChange, role, onLogout }: Side
         ))}
       </nav>
 
-      <button
-        onClick={handleLogoutClick}
-        title="Déconnexion"
-        className="mt-auto p-3 text-rose-400 hover:text-rose-200 hover:bg-rose-500/10 rounded-xl transition group relative flex items-center justify-center"
-      >
-        <LogOut className="h-5 w-5" />
-        <span className="absolute left-20 bg-slate-800 text-rose-400 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-700 shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-          Déconnexion
-        </span>
-      </button>
     </aside>
   );
 }

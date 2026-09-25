@@ -16,6 +16,11 @@ async def list_registers(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     stmt = select(Register).where(Register.is_active == True)
+    if getattr(current_user.role, "code", None) not in {"ADMIN", "SUPERADMIN"}:
+        allowed_pos_ids = [point.id for point in current_user.points_of_sale]
+        if not allowed_pos_ids:
+            return []
+        stmt = stmt.where(Register.pos_id.in_(allowed_pos_ids))
     result = await db.execute(stmt)
     registers = result.scalars().all()
     
@@ -23,6 +28,7 @@ async def list_registers(
         {
             "id": str(r.id),
             "name": r.name,
+            "pos_id": str(r.pos_id),
             "is_active": r.is_active,
         }
         for r in registers

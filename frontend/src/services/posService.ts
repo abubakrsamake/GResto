@@ -70,7 +70,17 @@ export const posService = {
       api.get<Product[]>('/catalog/products'),
       api.get<Category[]>('/catalog/categories'),
     ]);
-    return { products: resProd.data as Product[], categories: resCat.data as Category[] };
+    const products = resProd.data.map((product) => ({
+      ...product,
+      modifier_groups: (product.modifier_groups || []).map((group: any) => ({
+        ...group,
+        options: (group.options || group.modifiers || []).map((modifier: any) => ({
+          ...modifier,
+          price: Number(modifier.price ?? modifier.price_override ?? 0),
+        })),
+      })),
+    }));
+    return { products, categories: resCat.data as Category[] };
   },
 
   createOrder: async (payload: OrderCreatePayload) => {

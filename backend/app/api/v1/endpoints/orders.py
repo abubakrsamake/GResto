@@ -9,11 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.dependencies import get_current_user
 from app.core.websocket_manager import kds_ws_manager
 from app.core.security import ALGORITHM, SECRET_KEY
 from app.core.models import Modifier, ModifierGroup, Order, OrderItem, OrderItemModifier, Product, RegisterSession, User
+from app.services.order_workflow import can_transition_order_status
+from app.services.order_pricing import split_tax_inclusive_amount
 from app.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
 
 router = APIRouter(tags=["Commandes & KDS"])
@@ -90,7 +92,8 @@ async def create_order(
 
     for item_data in payload.items:
         product_stmt = select(Product).options(
-            selectinload(Product.modifier_groups).selectinload(ModifierGroup.modifiers)
+            selectinload(Product.modifier_groups).selectinload(ModifierGroup.modifiers),
+            selectinload(Product.variants),
         ).where(Product.id == item_data.product_id, Product.is_active == True)
         product_res = await db.execute(product_stmt)
         product = product_res.scalar_one_or_none()
@@ -101,7 +104,23 @@ async def create_order(
                 detail=f"Produit ID {item_data.product_id} non trouvé ou inactif."
             )
 
-        unit_price = product.base_price
+        active_variants = [variant for variant in product.variants]
+        selected_variant = next(
+            (variant for variant in active_variants if variant.id == item_data.variant_id),
+            None,
+        )
+        if item_data.variant_id and not selected_variant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La variante sélectionnée n'appartient pas à ce produit.",
+            )
+        if active_variants and not selected_variant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Sélectionnez une variante pour le produit {product.name}.",
+            )
+
+        unit_price = selected_variant.price_override if selected_variant else product.base_price
         tax_rate = product.tax_rate or Decimal("0.00")
         
         selected_modifiers_db: list[OrderItemModifier] = []
@@ -136,8 +155,7 @@ async def create_order(
         effective_unit_price = unit_price + modifiers_additional_price
         line_subtotal_ttc = effective_unit_price * Decimal(item_data.quantity)
 
-        line_subtotal_ht = line_subtotal_ttc / (Decimal("1.00") + (tax_rate / Decimal("100.00")))
-        line_tax = line_subtotal_ttc - line_subtotal_ht
+        line_subtotal_ht, line_tax = split_tax_inclusive_amount(line_subtotal_ttc, tax_rate)
 
         total_ht += line_subtotal_ht
         total_tax += line_tax
@@ -147,6 +165,7 @@ async def create_order(
             order_id=order_id,
             product_id=product.id,
             product_name=product.name,
+            variant_name=selected_variant.name if selected_variant else None,
             unit_price=effective_unit_price,
             tax_rate=tax_rate,
             quantity=item_data.quantity,
@@ -265,16 +284,21 @@ async def update_order_status(
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commande introuvable.")
 
-    valid_statuses = {"PENDING", "PREPARING", "READY", "SERVED", "PAID", "CANCELLED"}
-    if payload.status not in valid_statuses:
+    if payload.status == "PAID":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Statut de commande invalide."
+            detail="Le statut PAID est réservé au traitement du paiement."
         )
 
     user_role = getattr(current_user.role, "code", None)
     if user_role not in {"ADMIN", "SUPERADMIN"} and order.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès interdit à cette commande.")
+
+    if not can_transition_order_status(order.status, payload.status):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Transition de commande invalide : {order.status} vers {payload.status}.",
+        )
 
     order.status = payload.status
     try:
@@ -322,9 +346,24 @@ async def kds_websocket_endpoint(
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("type") != "access" or not payload.get("sub"):
             raise JWTError
+        user_id = uuid.UUID(payload["sub"])
     except (JWTError, ValueError):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+
+    async with AsyncSessionLocal() as db:
+        user_stmt = select(User).options(
+            selectinload(User.role), selectinload(User.points_of_sale)
+        ).where(User.id == user_id, User.is_active == True)
+        user = (await db.execute(user_stmt)).scalar_one_or_none()
+        if not user:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        if getattr(user.role, "code", None) not in {"ADMIN", "SUPERADMIN"}:
+            allowed_pos_ids = {point.id for point in user.points_of_sale}
+            if pos_id not in allowed_pos_ids or payload.get("pos_id") != str(pos_id):
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
 
     await kds_ws_manager.connect(pos_id, websocket)
     try:
