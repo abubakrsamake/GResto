@@ -12,6 +12,7 @@ class SessionOpenRequest(BaseSchema):
 
 
 class SessionCloseRequest(BaseSchema):
+    session_id: uuid.UUID = Field(..., description="ID de la session à clôturer")
     actual_amount: Decimal = Field(..., ge=0, description="Montant réel compté en caisse")
     notes: str | None = None
 

@@ -21,6 +21,16 @@ export default function CustomizationModal({
   onConfirm,
   onClose
 }: CustomizationModalProps) {
+  
+  // Vérification si au moins un groupe obligatoire n'a pas été sélectionné
+  const isMissingRequired = product.modifier_groups?.some((group: ModifierGroup) => {
+    if (!group.is_required && (group.min_selection || 0) <= 0) return false;
+    const options = group.options || (group as any).modifiers || [];
+    const selectedCount = activeModifiers.filter(m => options.some(opt => opt.id === m.id)).length;
+    const minRequired = group.min_selection || (group.is_required ? 1 : 0);
+    return selectedCount < minRequired;
+  });
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-2xl p-6 shadow-2xl flex flex-col max-h-[90vh]">
@@ -63,35 +73,44 @@ export default function CustomizationModal({
           )}
 
           {/* Modifier Groups */}
-          {product.modifier_groups?.map((group: ModifierGroup) => (
-            <div key={group.id}>
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">{group.name}</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {group.options.map((opt: ModifierOption) => {
-                  const isSelected = activeModifiers.some(m => m.id === opt.id);
-                  return (
-                    <button
-                      key={opt.id}
-                      onClick={() => onToggleModifier(opt)}
-                      className={`p-3 rounded-xl border text-left flex justify-between items-center transition ${
-                        isSelected 
-                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300 font-bold' 
-                          : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-600'}`}>
-                          {isSelected && <Check className="h-3 w-3 text-white" />}
+          {product.modifier_groups?.map((group: ModifierGroup) => {
+            const optionsList: ModifierOption[] = group.options || (group as any).modifiers || [];
+            
+            return (
+              <div key={group.id}>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">{group.name}</h3>
+                  {group.is_required && (
+                    <span className="text-xs bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded font-bold">Obligatoire</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {optionsList.map((opt: ModifierOption) => {
+                    const isSelected = activeModifiers.some(m => m.id === opt.id);
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => onToggleModifier(opt)}
+                        className={`p-3 rounded-xl border text-left flex justify-between items-center transition ${
+                          isSelected 
+                            ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300 font-bold' 
+                            : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-600'}`}>
+                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                          <span>{opt.name}</span>
                         </div>
-                        <span>{opt.name}</span>
-                      </div>
-                      {opt.price > 0 && <span className="text-sm font-bold text-slate-400">+ {opt.price} FCFA</span>}
-                    </button>
-                  );
-                })}
+                        {opt.price > 0 && <span className="text-sm font-bold text-slate-400">+ {opt.price} FCFA</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="border-t border-slate-800 pt-4 flex items-center justify-between shrink-0">
@@ -101,7 +120,11 @@ export default function CustomizationModal({
               {calculateUnitPrice(product, activeVariant, activeModifiers).toLocaleString()} FCFA
             </span>
           </div>
-          <button onClick={onConfirm} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 font-bold text-white rounded-xl shadow-lg shadow-indigo-600/20">
+          <button 
+            onClick={onConfirm} 
+            disabled={isMissingRequired}
+            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 font-bold text-white rounded-xl shadow-lg shadow-indigo-600/20 transition"
+          >
             Ajouter au panier
           </button>
         </div>

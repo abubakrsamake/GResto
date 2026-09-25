@@ -17,14 +17,15 @@ class POSApiBridge:
     def __init__(self, api_base_url: str | None = None):
         self.api_base_url = (api_base_url or os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")).rstrip("/")
         self.printer_service = USBPrinterService()
+        
 
+   
     def print_order_receipt(self, order_id: str, auth_token: str) -> dict:
         """
         1. Télécharge le flux binaire ESC/POS depuis FastAPI
         2. L'envoie à l'imprimante thermique USB via PyUSB
         """
         try:
-            # Récupération du flux binaire via l'endpoint /payments/{order_id}/receipt/raw
             url = f"{self.api_base_url}/payments/{order_id}/receipt/raw"
             headers = {"Authorization": f"Bearer {auth_token}"}
             
@@ -37,8 +38,6 @@ class POSApiBridge:
                 }
 
             raw_bytes = response.content
-
-            # Envoi binaire direct vers le matériel
             result = self.printer_service.print_raw_bytes(raw_bytes)
             return result
 
@@ -57,8 +56,7 @@ class POSApiBridge:
 
 
 def main():
-    # Déterminer la source du frontend (Dev React Vite ou Prod Build)
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    frontend_url = os.getenv("FRONTEND_URL", "http://51.210.40.107")
 
     # Instanciation du Bridge
     bridge = POSApiBridge()
@@ -70,9 +68,10 @@ def main():
         js_api=bridge,
         width=1280,
         height=800,
-        fullscreen=False,  # Mettre à True en production pour un mode borne/caisse
+        fullscreen=False,  # Mode plein écran
         resizable=True
     )
+
 
     # Lancement de l'application desktop
     debug = os.getenv("DEBUG", "false").lower() == "true"
@@ -81,4 +80,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

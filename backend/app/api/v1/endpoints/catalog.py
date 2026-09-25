@@ -62,9 +62,10 @@ async def get_categories(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    result = await db.execute(select(Category))
+    # Tri par ordre d'affichage
+    stmt = select(Category).where(Category.is_active == True).order_by(Category.display_order.asc())
+    result = await db.execute(stmt)
     return result.scalars().all()
-
 
 # --- Endpoints Produits ---
 
@@ -75,8 +76,7 @@ async def get_products(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    # Charge la catégorie ET les groupes de modificateurs + leurs options
-    stmt = select(Product).options(*get_product_options())
+    stmt = select(Product).options(*get_product_options()).where(Product.is_active == True)
     
     if category_id:
         stmt = stmt.where(Product.category_id == category_id)
@@ -90,7 +90,7 @@ async def create_product(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_roles(["ADMIN", "MANAGER", "SUPERADMIN"])),
 ):
-    # Vérification de l'existence de la catégorie
+    # 1. Vérification de la catégorie
     category = await db.get(Category, product_in.category_id)
     if not category:
         raise HTTPException(
@@ -98,12 +98,22 @@ async def create_product(
             detail="La catégorie spécifiée n'existe pas.",
         )
 
+    # 2. Création de l'instance du produit
     product_data = product_in.model_dump(exclude={"modifier_group_ids"})
     new_product = Product(**product_data)
+    
     db.add(new_product)
+    await db.flush()  # Génère l'ID en base sans finaliser la transaction
+
+    # 3. Association des groupes de modificateurs dans la table de liaison
+    if product_in.modifier_group_ids:
+        groups_stmt = select(ModifierGroup).where(ModifierGroup.id.in_(product_in.modifier_group_ids))
+        groups_result = await db.execute(groups_stmt)
+        new_product.modifier_groups = list(groups_result.scalars().all())
+
     await db.commit()
 
-    # Rechargement avec la relation 'category'
+    # 4. Chargement complet pour le retour API avec relations
     result = await db.execute(
         select(Product)
         .options(*get_product_options())
@@ -148,6 +158,19 @@ async def update_product(
         raise HTTPException(status_code=404, detail="Produit introuvable.")
 
     update_data = product_in.model_dump(exclude_unset=True)
+    
+    # Traitement de la relation Many-to-Many
+    if "modifier_group_ids" in update_data:
+        group_ids = update_data.pop("modifier_group_ids")
+        if group_ids is not None:
+            if len(group_ids) > 0:
+                groups_stmt = select(ModifierGroup).where(ModifierGroup.id.in_(group_ids))
+                groups_result = await db.execute(groups_stmt)
+                product.modifier_groups = list(groups_result.scalars().all())
+            else:
+                product.modifier_groups = []  # Vider les groupes si un tableau vide est transmis
+    
+    # Mise à jour des autres champs scalaires
     for field, value in update_data.items():
         if isinstance(value, str):
             value = value.strip()
@@ -156,8 +179,14 @@ async def update_product(
         setattr(product, field, value)
 
     await db.commit()
-    await db.refresh(product)
-    return product
+
+    # Recharge le produit pour vérifier l'état final
+    updated_result = await db.execute(
+        select(Product)
+        .options(*get_product_options())
+        .where(Product.id == product_id)
+    )
+    return updated_result.scalar_one()
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)

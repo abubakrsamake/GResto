@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-
+import { Toaster } from 'react-hot-toast';
 import LoginView from './components/LoginView';
 import AdminLoginView from './components/admin/AdminLoginView';
 import LoadingScreen from './components/common/LoadingScreen';
@@ -44,6 +44,7 @@ export default function App() {
   const isSuperAdmin = user.role === 'SUPERADMIN';
 
   return (
+    
     <AppShell
       activeTab={activeTab}
       onTabChange={setActiveTab}
@@ -52,6 +53,10 @@ export default function App() {
       userCode={user.code}
       onLogout={handleLogout}
     >
+      <div>
+        {/* Ton application */}
+        <Toaster position="top-right" reverseOrder={false} />
+      </div>
       {isSuperAdmin ? (
         <AdminDashboard activeTab={activeTab} />
       ) : (

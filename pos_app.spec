@@ -9,14 +9,14 @@ block_cipher = None
 # --- COLLECTE DES DEPENDANCES & DONNEES ---
 # Inclut les schémas, modèles, templates et assets statiques du Frontend (build React)
 datas = [
-    ('frontend/dist', 'frontend/dist'),      # Dossier de build React (Vite/Webpack)
-    ('backend/database.db', 'backend'),      # Base de données SQLite initiale si présente
+    ('frontend/dist', 'frontend/dist'),
+    ('desktop/logogresto.ico', 'desktop'),
 ]
 
 # Récupération automatique des données Uvicorn et Pydantic
 datas += collect_data_files('uvicorn')
 datas += collect_data_files('pydantic')
-datas += collect_data_files('pywebview')
+datas += collect_data_files('webview')
 
 # Modules masqués (Hidden Imports) indispensables pour FastAPI/Uvicorn & pywebview
 hiddenimports = [
@@ -29,18 +29,20 @@ hiddenimports = [
     'uvicorn.protocols.http.h11_impl',
     'uvicorn.lifespan',
     'uvicorn.lifespan.on',
-    'engineio.async_drivers.asgi',
-    'pywebview',
+    'webview',
     'clr', # Nécessaire pour pywebview sous Windows (.NET Bridge)
     'pydantic_settings',
     'sqlalchemy.dialects.sqlite',
+    'app',
+    'desktop.printer_service',
 ]
 hiddenimports += collect_submodules('fastapi')
 hiddenimports += collect_submodules('pydantic')
+hiddenimports += collect_submodules('app')
 
 a = Analysis(
-    ['app_runner.py'],  # Fichier Python principal qui lance FastAPI et pywebview
-    pathex=['.'],
+    ['desktop/main.py'],
+    pathex=['.', 'backend', 'desktop'],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -75,5 +77,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/icon.ico',  # Facultatif : Chemin de l'icône de ton application (.ico)
+    icon='desktop/logogresto.ico',
 )

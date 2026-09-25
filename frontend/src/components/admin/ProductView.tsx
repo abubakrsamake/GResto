@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Package, RefreshCw, Edit3, Trash2 } from 'lucide-react';
-import { ProductModal } from '../common/ProductModal';
+import { Package, RefreshCw, Edit3, Trash2, Plus, Layers, PlusCircle } from 'lucide-react';
+import { CreateProductModal } from '../common/CreateProductModal';
+import { CreateModifierModal } from '../common/CreateModifierModal';
+import { CreateModifierGroupModal } from '../common/CreateModifierGroupModal';
 import api from '../../services/api';
 import type { Product, IdLike } from '../../types';
 
@@ -8,7 +10,12 @@ export default function ProductView() {
   const [items, setItems] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showModal, setShowModal] = useState(false);
+
+  // ÉTATS DES 3 MODAUX
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showModifierModal, setShowModifierModal] = useState(false);
+  const [showModifierGroupModal, setShowModifierGroupModal] = useState(false);
+  
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   const loadProducts = useCallback(async () => {
@@ -34,14 +41,14 @@ export default function ProductView() {
     );
   }, [items, search]);
 
-  const handleOpenCreate = () => {
+  const handleOpenCreateProduct = () => {
     setSelectedProduct(null);
-    setShowModal(true);
+    setShowProductModal(true);
   };
 
-  const handleOpenEdit = (product: Product) => {
+  const handleOpenEditProduct = (product: Product) => {
     setSelectedProduct(product);
-    setShowModal(true);
+    setShowProductModal(true);
   };
 
   const handleDelete = async (id: IdLike) => {
@@ -51,8 +58,7 @@ export default function ProductView() {
       await api.delete(`/catalog/${id}`);
       loadProducts();
     } catch (err: any) {
-      const message = err.response?.data?.detail || err.message || 'Erreur inconnue';
-      alert(`Suppression échouée : ${message}`);
+      alert(`Suppression échouée : ${err.response?.data?.detail || err.message}`);
     }
   };
 
@@ -60,27 +66,43 @@ export default function ProductView() {
     return new Intl.NumberFormat('fr-FR').format(Number(price));
   };
 
-  const categoryColor = (category: Product['category']) => {
-    if (category?.color_code) return category.color_code;
-    const palette = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#8b5cf6'];
-    const key = String(category?.id || category?.name || 'general');
-    const hash = [...key].reduce((total, character) => total + character.charCodeAt(0), 0);
-    return palette[hash % palette.length];
-  };
-
   return (
     <div className="p-6 bg-slate-950 min-h-full text-slate-100">
-      <div className="flex items-center justify-between mb-6">
+      {/* En-tête avec les 3 BOUTONS D'ACTION */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Package className="h-6 w-6 text-amber-400" />
-          <h2 className="text-xl font-black text-white">Gestion des Produits</h2>
+          <h2 className="text-xl font-black text-white">Gestion des Produits & Options</h2>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20"
-        >
-          + Ajouter produit
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Bouton 1 : Créer un groupe d'options */}
+          <button
+            onClick={() => setShowModifierGroupModal(true)}
+            className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+          >
+            <Layers className="w-4 h-4" />
+            + Groupe d'options
+          </button>
+
+          {/* Bouton 2 : Créer un modificateur/accompagnement */}
+          <button
+            onClick={() => setShowModifierModal(true)}
+            className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+          >
+            <PlusCircle className="w-4 h-4" />
+             Option
+          </button>
+
+          {/* Bouton 3 : Créer un Produit */}
+          <button
+            onClick={handleOpenCreateProduct}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl text-xs font-black transition-all shadow-lg shadow-amber-500/10 flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+             Produit
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-6">
@@ -100,6 +122,7 @@ export default function ProductView() {
         </button>
       </div>
 
+      {/* Grille d'affichage des produits */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {filteredProducts.length === 0 ? (
           <div className="col-span-full py-12 text-center text-slate-500 bg-slate-900/50 rounded-2xl border border-slate-800">
@@ -128,23 +151,11 @@ export default function ProductView() {
                 <p className="text-sm font-semibold text-amber-400">
                   {formatPrice(product.base_price)} FCFA
                 </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span
-                    className="px-2 py-0.5 text-xs font-medium rounded-md text-white border"
-                    style={{
-                      backgroundColor: `${categoryColor(product.category)}cc`,
-                      borderColor: `${categoryColor(product.category)}88`,
-                    }}
-                  >
-                    {product.category?.name || 'Général'}
-                  </span>
-                  <span className="text-xs text-slate-500">TVA {product.tax_rate}%</span>
-                </div>
               </div>
 
               <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-800/60">
                 <button
-                  onClick={() => handleOpenEdit(product)}
+                  onClick={() => handleOpenEditProduct(product)}
                   className="p-1.5 rounded-lg bg-indigo-950/50 text-indigo-400 hover:bg-indigo-900/50 transition-colors"
                   title="Modifier"
                 >
@@ -163,11 +174,24 @@ export default function ProductView() {
         )}
       </div>
 
-      <ProductModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
+      {/* Rendu des 3 Modaux */}
+      <CreateProductModal
+        isOpen={showProductModal}
+        onClose={() => setShowProductModal(false)}
         onSuccess={loadProducts}
         initialData={selectedProduct}
+      />
+
+      <CreateModifierModal
+        isOpen={showModifierModal}
+        onClose={() => setShowModifierModal(false)}
+        onSuccess={loadProducts}
+      />
+
+      <CreateModifierGroupModal
+        isOpen={showModifierGroupModal}
+        onClose={() => setShowModifierGroupModal(false)}
+        onSuccess={loadProducts}
       />
     </div>
   );

@@ -12,16 +12,19 @@ export interface Variant {
 
 export interface ModifierOption {
   id: string | number;
+  group_id?: string;
   name: string; // ex: "Supplément Fromage", "Sans Oignon"
-  price: number;
+  price: number; // Prix additionnel du modificateur
 }
 
 export interface ModifierGroup {
-  id: string | number;
-  name: string; // ex: "Choix de Sauce", "Suppléments"
+  id: string;
+  name: string;
+  is_required?: boolean;
   min_selection?: number;
   max_selection?: number;
   options: ModifierOption[];
+  modifiers?: ModifierOption[]; // Fallback d'alias backend
 }
 export interface Category {
   id: string | number;
@@ -72,18 +75,32 @@ interface PosState {
   setCategory: (categoryId: string) => void;
   setSearchQuery: (query: string) => void;
   getSubtotal: () => number;
+  
 }
 
 // ✅ Assurez-vous d'avoir "export const" devant la fonction :
 export const calculateUnitPrice = (
-  product: Product, 
-  variant?: Variant, 
-  modifiers: ModifierOption[] = []
+  product: Product,
+  selectedVariant?: Variant,
+  selectedModifiers: ModifierOption[] = []
 ): number => {
-  const base = variant?.price_override !== undefined ? Number(variant.price_override) : Number(product.base_price);
-  const modifiersTotal = modifiers.reduce((sum, mod) => sum + Number(mod.price || 0), 0);
+  // 1. Déterminer le prix de base (ou le prix surchargé par la variante)
+  const base = selectedVariant?.price_override !== undefined && selectedVariant?.price_override !== null
+    ? Number(selectedVariant.price_override)
+    : Number(product.base_price || 0);
+
+  // 2. Additionner les prix des modificateurs sélectionnés
+  const modifiersTotal = selectedModifiers.reduce((sum, mod) => sum + Number(mod.price || 0), 0);
+
   return base + modifiersTotal;
 };
+
+
+// Store Zustand pour l'état du POS
+// ---------------------------------------------------------------------------
+
+
+
 
 // Helper pour générer une clé unique pour chaque configuration d'article
 const generateCartItemId = (

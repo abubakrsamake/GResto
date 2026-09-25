@@ -1,4 +1,5 @@
 import { ShoppingCart, ChefHat, Receipt, FileText, Settings, Users, Package, BarChart3, LogOut } from 'lucide-react';
+import logoUrl from '../../assets/logo_p.jpg';
 
 interface SidebarProps {
   activeTab: string;
@@ -38,7 +39,7 @@ export default function Sidebar({ activeTab, onTabChange, role, onLogout }: Side
   return (
     <aside className="w-20 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 shrink-0 h-full">
       <div className="p-3 mb-6">
-        <img src="/src/assets/Logo_p.jpg" alt="Logo" className="h-9 w-9 rounded-full shadow-lg shadow-indigo-600/20" />
+        <img src={logoUrl} alt="GRestaurant" className="h-9 w-9 rounded-full shadow-lg shadow-indigo-600/20" />
       </div>
 
       <nav className="flex flex-col gap-2">

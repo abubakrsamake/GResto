@@ -1,4 +1,5 @@
 import { LogOut } from 'lucide-react';
+import logoUrl from '../../assets/Logo.svg';
 
 interface AppHeaderProps {
   isSuperAdmin: boolean;
@@ -20,7 +21,7 @@ export default function AppHeader({
   return (
     <header className="w-full h-14 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 shrink-0 shadow-xl z-30">
       <div className="flex items-center gap-3">
-        <img src="/src/assets/Logo.svg" alt="Logo" className="h-9 w-9 rounded-full shadow-lg shadow-indigo-600/30" />
+        <img src={logoUrl} alt="GRestaurant" className="h-9 w-9 rounded-full shadow-lg shadow-indigo-600/30" />
         <div>
           <h2 className="text-sm font-black text-white leading-none">GRestaurant</h2>
           <p className="text-[10px] text-slate-500 font-medium">{isSuperAdmin ? 'Back-Office Admin' : 'POS Terminal'}</p>

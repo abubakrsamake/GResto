@@ -34,18 +34,20 @@ async def seed():
             rc = role_map["CASHIER"]
         # Utilisateurs
         ua = User(id=uuid.uuid4(), first_name="Admin", last_name="Resto", email="admin@resto.com", pin_code="$2b$12$9gLGH/FzQX2PjbtUt5mIXONww3enVqZgF.u7l3JsI4/8Eja8CCsZC", is_active=True, role_id=ra.id)
-        uc = User(id=uuid.uuid4(), first_name="Marie", last_name="Dupont", email="marie@resto.com", pin_code="$2b$12$9gLGH/FzQX2PjbtUt5mIXONww3enVqZgF.u7l3JsI4/8Eja8CCsZC", is_active=True, role_id=rc.id)
+        uc = User(id=uuid.uuid4(), first_name="Mariame", last_name="Diarra", email="mariame@resto.com", pin_code="$2b$12$9gLGH/FzQX2PjbtUt5mIXONww3enVqZgF.u7l3JsI4/8Eja8CCsZC", is_active=True, role_id=rc.id)
         db.add_all([ua, uc])
         # POS + Registre + Session
         p = PointOfSale(id=uuid.uuid4(), name="Caisse 1", address="123 Rue", is_active=True)
         reg = Register(id=uuid.uuid4(), pos_id=p.id, name="Reg1", code="R1", is_active=True)
         sess = RegisterSession(id=uuid.uuid4(), register_id=reg.id, opened_by=ua.id, opening_amount=Decimal("500000"), expected_amount=Decimal("500000"), status="OPEN")
         db.add_all([p, reg, sess])
+        await db.flush()
         # Catégories + Produits (plus nombreux pour voir dans l'interface)
         c1 = Category(id=uuid.uuid4(), name="Boissons", is_active=True)
         c2 = Category(id=uuid.uuid4(), name="Plats", is_active=True)
         c3 = Category(id=uuid.uuid4(), name="Desserts", is_active=True)
         db.add_all([c1, c2, c3])
+        await db.flush()
         # === Produits (plus nombreux) ===
         cats = {
             "Boissons": c1.id,
@@ -72,11 +74,13 @@ async def seed():
                 base_price=Decimal(prix), tax_rate=Decimal("18.00"), is_active=True
             )
             db.add(prod)
+        await db.flush()
         # Modificateurs
         g = ModifierGroup(id=uuid.uuid4(), name="Options", is_required=False)
         db.add(g)
         # Table
         db.add(DiningTable(id=uuid.uuid4(), pos_id=p.id, table_number="T1", capacity=4))
+        await db.flush()
         # Commande exemple avec plusieurs produits
         oid = uuid.uuid4()
         first_prod_id = None

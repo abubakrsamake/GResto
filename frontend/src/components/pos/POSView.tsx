@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { 
   ShoppingCart, Trash2, Plus, Minus, CreditCard, 
-  Banknote, Search, RefreshCw, Layers, Check, X, Printer,
+  Banknote, Search, RefreshCw, Layers, X, Printer,
   Delete, RotateCcw
 } from 'lucide-react';
 import { posService } from '../../services/posService';
 import paymentService from '../../services/paymentService';
+import CustomizationModal from './CustomizationModal';
 import InvoiceView from '../common/InvoiceView';
-import { usePosStore, calculateUnitPrice } from '../../store/usePosStore';
-import type { Product, Variant, Category, ModifierOption, ModifierGroup } from '../../store/usePosStore';
+import { usePosStore,  } from '../../store/usePosStore';
+import type { Product, Variant, Category, ModifierOption } from '../../store/usePosStore';
 import type { InvoiceData } from '../common/InvoiceView';
 import useCart from '../../hooks/useCart';
 import useDebounce from '../../hooks/useDebounce';
@@ -386,89 +387,15 @@ export default function POSView() {
 
       {/* ----------------- MODAL PERSONNALISATION ----------------- */}
       {selectedProductForOptions && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-2xl p-6 shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3 shrink-0">
-              <div>
-                <h2 className="text-2xl font-black text-white">{selectedProductForOptions.name}</h2>
-                <p className="text-sm text-slate-400">Personnalisez votre commande</p>
-              </div>
-              <button onClick={() => setSelectedProductForOptions(null)} className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto my-4 space-y-6 pr-1 min-h-0">
-              {selectedProductForOptions.variants && selectedProductForOptions.variants.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Taille / Format</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {selectedProductForOptions.variants.map((v) => {
-                      const isSelected = activeVariant?.id === v.id;
-                      const variantPrice = v.price_override !== undefined ? v.price_override : selectedProductForOptions.base_price;
-                      return (
-                        <button
-                          key={v.id}
-                          onClick={() => setActiveVariant(v)}
-                          className={`p-3 rounded-xl border text-left flex justify-between items-center transition ${
-                            isSelected 
-                              ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300 font-bold' 
-                              : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
-                          }`}
-                        >
-                          <span>{v.name}</span>
-                          <span className="text-sm font-black">{Number(variantPrice).toLocaleString()} FCFA</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {selectedProductForOptions.modifier_groups?.map((group: ModifierGroup) => (
-                <div key={group.id}>
-                  <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">{group.name}</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {group.options.map((opt: ModifierOption) => {
-                      const isSelected = activeModifiers.some(m => m.id === opt.id);
-                      return (
-                        <button
-                          key={opt.id}
-                          onClick={() => toggleModifier(opt)}
-                          className={`p-3 rounded-xl border text-left flex justify-between items-center transition ${
-                            isSelected 
-                              ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300 font-bold' 
-                              : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-600'}`}>
-                              {isSelected && <Check className="h-3 w-3 text-white" />}
-                            </div>
-                            <span>{opt.name}</span>
-                          </div>
-                          {opt.price > 0 && <span className="text-sm font-bold text-slate-400">+ {opt.price} FCFA</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="border-t border-slate-800 pt-4 flex items-center justify-between shrink-0">
-              <div>
-                <span className="text-xs text-slate-400 block">Prix unitaire configuré</span>
-                <span className="text-2xl font-black text-indigo-400">
-                  {calculateUnitPrice(selectedProductForOptions, activeVariant, activeModifiers).toLocaleString()} FCFA
-                </span>
-              </div>
-              <button onClick={handleConfirmCustomization} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 font-bold text-white rounded-xl shadow-lg shadow-indigo-600/20">
-                Ajouter au panier
-              </button>
-            </div>
-          </div>
-        </div>
+        <CustomizationModal
+          product={selectedProductForOptions}
+          activeVariant={activeVariant}
+          activeModifiers={activeModifiers}
+          onSelectVariant={(variant) => setActiveVariant(variant)}
+          onToggleModifier={toggleModifier}
+          onConfirm={handleConfirmCustomization}
+          onClose={() => setSelectedProductForOptions(null)}
+        />
       )}
 
       {/* ----------------- MODAL D'ENCAISSEMENT AVEC NUMPAD ----------------- */}
