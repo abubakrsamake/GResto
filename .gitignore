@@ -60,3 +60,5 @@ tmp/
 # Test and local execution output
 test-results/
 playwright-report/
+
+*.sh

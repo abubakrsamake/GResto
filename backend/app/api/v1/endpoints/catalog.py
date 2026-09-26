@@ -263,9 +263,8 @@ async def upload_product_image(
     product.image_url = f"{str(request.base_url).rstrip('/')}/media/products/{filename}"
     await db.commit()
     result = await db.execute(
-        select(Product).options(
-            selectinload(Product.category),
-            selectinload(Product.modifier_groups).selectinload(ModifierGroup.modifiers),
-        ).where(Product.id == product_id)
+        select(Product)
+        .options(*get_product_options())
+        .where(Product.id == product_id)
     )
     return result.scalar_one()
